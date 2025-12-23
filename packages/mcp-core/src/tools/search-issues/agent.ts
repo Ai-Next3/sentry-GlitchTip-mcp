@@ -12,7 +12,7 @@ import { systemPrompt } from "./config";
 export const searchIssuesAgentOutputSchema = z.object({
   query: z.string().describe("The Sentry issue search query"),
   sort: z
-    .enum(["date", "freq", "new", "user"])
+    .enum(["last_seen", "count", "first_seen", "priority"])
     .nullable()
     .describe("How to sort the results"),
   explanation: z

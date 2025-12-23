@@ -205,17 +205,32 @@
     "description": "Create and modify projects, teams, and DSNs",
     "defaultEnabled": false,
     "order": 5,
-    "toolCount": 9,
+    "toolCount": 15,
     "tools": [
+      {
+        "name": "create_alert",
+        "description": "Create a new alert rule for a project in GlitchTip.\nBe careful to specify valid conditions and actions if providing them, otherwise defaults will be used.",
+        "requiredScopes": ["project:write"]
+      },
       {
         "name": "create_dsn",
         "description": "Create an additional DSN for an EXISTING project.\n\nUSE THIS TOOL WHEN:\n- Project already exists and needs additional DSN\n- 'Create another DSN for project X'\n- 'I need a production DSN for existing project'\n\nDO NOT USE for new projects (use create_project instead)\n\nBe careful when using this tool!\n\n<examples>\n### Create additional DSN for existing project\n```\ncreate_dsn(organizationSlug='my-organization', projectSlug='my-project', name='Production')\n```\n</examples>\n\n<hints>\n- If the user passes a parameter in the form of name/otherName, its likely in the format of <organizationSlug>/<projectSlug>.\n- If any parameter is ambiguous, you should clarify with the user what they meant.\n</hints>",
         "requiredScopes": ["project:write"]
       },
       {
+        "name": "create_monitor",
+        "description": "Create a new uptime monitor in GlitchTip.\nUse this tool to start monitoring a website or API endpoint.",
+        "requiredScopes": ["org:write"]
+      },
+      {
         "name": "create_project",
         "description": "Create a new project in Sentry (includes DSN automatically).\n\nUSE THIS TOOL WHEN USERS WANT TO:\n- 'Create a new project'\n- 'Set up a project for [app/service] with team [X]'\n- 'I need a new Sentry project'\n- Create project AND need DSN in one step\n\nDO NOT USE create_dsn after this - DSN is included in output.\n\nBe careful when using this tool!\n\n<examples>\n### Create new project with team\n```\ncreate_project(organizationSlug='my-organization', teamSlug='my-team', name='my-project', platform='javascript')\n```\n</examples>\n\n<hints>\n- If the user passes a parameter in the form of name/otherName, its likely in the format of <organizationSlug>/<teamSlug>.\n- If any parameter is ambiguous, you should clarify with the user what they meant.\n</hints>",
         "requiredScopes": ["project:write", "team:read"]
+      },
+      {
+        "name": "create_status_page",
+        "description": "Create a new status page in GlitchTip.\nStatus pages allow you to publicly communicate operational status.",
+        "requiredScopes": ["org:write"]
       },
       {
         "name": "create_team",
@@ -241,6 +256,21 @@
         "name": "find_teams",
         "description": "Find teams in an organization in Sentry.\n\nUse this tool when you need to:\n- View teams in a Sentry organization\n- Find a team's slug to aid other tool requests\n- Search for specific teams by name or slug\n\nReturns up to 25 results. If you hit this limit, use the query parameter to narrow down results.",
         "requiredScopes": ["team:read"]
+      },
+      {
+        "name": "list_alerts",
+        "description": "List all alert rules for a project in GlitchTip.\nUse this tool to see what conditions trigger notifications.",
+        "requiredScopes": ["project:read"]
+      },
+      {
+        "name": "list_monitors",
+        "description": "List all uptime monitors for an organization in GlitchTip.\nUse this tool to see what websites or services are currently being monitored.",
+        "requiredScopes": ["org:read"]
+      },
+      {
+        "name": "list_status_pages",
+        "description": "List all status pages for an organization in GlitchTip.\nUse this tool to see what public status pages are configured.",
+        "requiredScopes": ["org:read"]
       },
       {
         "name": "update_project",

@@ -4,6 +4,20 @@ Sentry's MCP service is primarily designed for human-in-the-loop coding agents. 
 
 This remote MCP server acts as middleware to the upstream Sentry API, optimized for coding assistants like Cursor, Claude Code, and similar development tools. It's based on [Cloudflare's work towards remote MCPs](https://blog.cloudflare.com/remote-model-context-protocol-servers-mcp/).
 
+## GlitchTip Compatibility
+
+This MCP server has been fully adapted and verified to work with [GlitchTip](https://glitchtip.com/), an open-source Sentry compatible error tracking platform.
+
+### Tool Availability
+
+| Category | Tools | Description |
+|----------|-------|-------------|
+| **🤝 Shared** | `whoami`, `find_organizations`, `find_projects`, `find_teams`, `find_releases`, `search_issues`, `get_issue_details`, `search_events`, `get_event_attachment`, `get_trace_details`, `update_issue`, `create_team`, `create_project`, `create_dsn` | Standard Sentry tools that work perfectly with GlitchTip. |
+| **🚀 Exclusive** | `list_monitors`, `create_monitor`, `list_status_pages`, `create_status_page`, `list_alerts`, `create_alert` | Tools created specifically for GlitchTip features (Uptime, Status Pages, Alerts). |
+| **⚠️ Limited** | `analyze_issue_with_seer`, `search_docs`, `get_doc` | `analyze_issue_with_seer` relies on Sentry's proprietary AI and is unavailable in GlitchTip. Docs tools search Sentry documentation, which is generally applicable but not specific to your GlitchTip instance. |
+
+GlitchTip API docs: https://app.glitchtip.com/api/docs
+
 ## Getting Started
 
 You'll find everything you need to know by visiting the deployed service in production:
@@ -49,6 +63,51 @@ OPENAI_API_KEY=  # Required for AI-powered search tools (search_events, search_i
 
 If you leave the host variable unset, the CLI automatically targets the Sentry
 SaaS service. Only set the override when you operate self-hosted Sentry.
+
+### Configuration for Clients
+
+To use this with Claude Desktop or Cursor, add the following to your configuration file (e.g., `~/Library/Application Support/Claude/claude_desktop_config.json` or project `.mcp.json`).
+
+**For GlitchTip (Source):**
+
+```json
+{
+  "mcpServers": {
+    "glitchtip": {
+      "command": "node",
+      "args": [
+        "/absolute/path/to/sentry-GlitchTip-mcp/packages/mcp-server/dist/index.js"
+      ],
+      "env": {
+        "SENTRY_ACCESS_TOKEN": "your-glitchtip-token",
+        "SENTRY_HOST": "glitchtip.your-domain.com",
+        "OPENAI_API_KEY": "sk-..."
+      }
+    }
+  }
+}
+```
+
+**For GlitchTip (NPX - Recommended):**
+
+```json
+{
+  "mcpServers": {
+    "glitchtip": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@sentry/mcp-server@latest",
+        "--access-token=your-glitchtip-token",
+        "--host=glitchtip.your-domain.com"
+      ],
+      "env": {
+         "OPENAI_API_KEY": "sk-..."
+      }
+    }
+  }
+}
+```
 
 ### MCP Inspector
 

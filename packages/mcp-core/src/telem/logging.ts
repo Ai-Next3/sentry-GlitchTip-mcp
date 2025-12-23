@@ -8,7 +8,6 @@
 import {
   configureSync,
   getConfig,
-  getConsoleSink,
   getJsonLinesFormatter,
   getLogger as getLogTapeLogger,
   parseLogLevel,
@@ -112,9 +111,20 @@ function ensureLoggingConfigured(): void {
     return;
   }
 
-  const consoleSink = getConsoleSink({
-    formatter: getJsonLinesFormatter(),
-  });
+  const formatter = getJsonLinesFormatter();
+  const consoleSink: Sink = (record: LogRecord) => {
+    const formatted = formatter(record);
+    if (
+      typeof process !== "undefined" &&
+      process.stderr &&
+      process.stderr.write
+    ) {
+      process.stderr.write(`${formatted}\n`);
+    } else {
+      // Fallback for non-Node environments or if process.stderr is missing
+      console.error(formatted);
+    }
+  };
   const sentrySink = createSentryLogsSink();
 
   configureSync<SinkId, never>({

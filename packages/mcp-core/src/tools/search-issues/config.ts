@@ -41,10 +41,10 @@ SORTING RULES:
    - CORRECT: query: "is:unresolved", sort: "user" ← Sort in separate field
 
 2. AVAILABLE SORT OPTIONS:
-   - date: Last seen (default)
-   - freq: Event frequency  
-   - new: First seen
-   - user: User count
+   - last_seen: Last seen (default) - equivalent to 'date'
+   - count: Event frequency - equivalent to 'freq'
+   - first_seen: First seen - equivalent to 'new'
+   - priority: Issue priority
 
 3. IMPORTANT: Query field is for filtering only (is:, level:, environment:, etc.)
 

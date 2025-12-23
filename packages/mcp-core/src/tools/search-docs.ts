@@ -6,7 +6,7 @@ import type { ServerContext } from "../types";
 import type { SearchResponse } from "./types";
 import { ParamSentryGuide } from "../schema";
 
-export default defineTool({
+export const searchDocs = defineTool({
   name: "search_docs",
   skills: ["docs"], // Only available in docs skill
   requiredScopes: [], // No Sentry API scopes required - authorization via 'docs' skill
@@ -83,7 +83,7 @@ export default defineTool({
         body: JSON.stringify({
           query: params.query,
           maxResults: params.maxResults,
-          guide: params.guide,
+          ...(params.guide ? { guide: params.guide } : {}),
         }),
       },
       15000, // 15 second timeout

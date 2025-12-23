@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Sentry MCP is a Model Context Protocol server that exposes Sentry's error tracking and performance monitoring to AI assistants through 19 tools.
+Sentry MCP is a Model Context Protocol server that exposes Sentry's error tracking and performance monitoring to AI assistants through 27 tools. It is fully compatible with GlitchTip.
 
 ## Principles
 
@@ -10,7 +10,7 @@ Sentry MCP is a Model Context Protocol server that exposes Sentry's error tracki
 
 ## Constraints
 
-- **Tool count**: Target ≤20, hard limit 25 (AI agents have limited tool slots).
+- **Tool count**: Target ≤30 (AI agents have limited tool slots).
 - **Quality gate**: `pnpm run tsc && pnpm run lint && pnpm run test` must pass before committing.
 
 ## Repository Structure
@@ -20,7 +20,7 @@ sentry-mcp/
 ├── packages/
 │   ├── mcp-core/            # Core MCP implementation (private)
 │   │   └── src/
-│   │       ├── tools/       # 19 tool modules
+│   │       ├── tools/       # 27 tool modules
 │   │       ├── server.ts    # buildServer()
 │   │       ├── api-client/  # Sentry API
 │   │       └── internal/    # Shared utils

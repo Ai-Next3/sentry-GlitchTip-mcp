@@ -70,6 +70,9 @@ import type {
   TraceSpanSchema,
   TraceIssueSchema,
   UserSchema,
+  MonitorSchema,
+  MonitorListSchema,
+  StatusPageSchema,
 } from "./schema";
 
 export type User = z.infer<typeof UserSchema>;
@@ -79,6 +82,8 @@ export type Project = z.infer<typeof ProjectSchema>;
 export type ClientKey = z.infer<typeof ClientKeySchema>;
 export type Release = z.infer<typeof ReleaseSchema>;
 export type Issue = z.infer<typeof IssueSchema>;
+export type Monitor = z.infer<typeof MonitorSchema>;
+export type StatusPage = z.infer<typeof StatusPageSchema>;
 
 // Individual event types
 export type ErrorEvent = z.infer<typeof ErrorEventSchema>;
@@ -110,6 +115,7 @@ export type IssueList = z.infer<typeof IssueListSchema>;
 export type EventAttachmentList = z.infer<typeof EventAttachmentListSchema>;
 export type TagList = z.infer<typeof TagListSchema>;
 export type ClientKeyList = z.infer<typeof ClientKeyListSchema>;
+export type MonitorList = z.infer<typeof MonitorListSchema>;
 
 // Trace types
 export type TraceMeta = z.infer<typeof TraceMetaSchema>;

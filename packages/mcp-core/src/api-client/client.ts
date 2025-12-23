@@ -3,7 +3,7 @@ import {
   getTraceUrl as getTraceUrlUtil,
   isSentryHost,
 } from "../utils/url-utils";
-import { logIssue, logWarn } from "../telem/logging";
+import { logWarn } from "../telem/logging";
 import {
   OrganizationListSchema,
   OrganizationSchema,
@@ -15,33 +15,31 @@ import {
   ReleaseListSchema,
   IssueListSchema,
   IssueSchema,
-  EventSchema,
-  EventAttachmentListSchema,
   ErrorsSearchResponseSchema,
   SpansSearchResponseSchema,
   TagListSchema,
   ApiErrorSchema,
   ClientKeyListSchema,
-  AutofixRunSchema,
-  AutofixRunStateSchema,
-  TraceMetaSchema,
   TraceSchema,
   UserSchema,
   UserRegionsSchema,
+  MonitorSchema,
+  MonitorListSchema,
+  StatusPageSchema,
+  StatusPageListSchema,
+  AlertRuleSchema,
+  AlertRuleListSchema,
 } from "./schema";
 import { ConfigurationError } from "../errors";
 import { createApiError, ApiNotFoundError, ApiValidationError } from "./errors";
 import { USER_AGENT } from "../version";
 import type {
-  AutofixRun,
-  AutofixRunState,
   ClientKey,
   ClientKeyList,
-  Event,
-  EventAttachment,
-  EventAttachmentList,
   Issue,
   IssueList,
+  Monitor,
+  MonitorList,
   OrganizationList,
   Project,
   ProjectList,
@@ -50,7 +48,6 @@ import type {
   Team,
   TeamList,
   Trace,
-  TraceMeta,
   User,
 } from "./types";
 // TODO: this is shared - so ideally, for safety, it uses @sentry/core, but currently
@@ -786,7 +783,7 @@ export class SentryApiService {
     }
     // For self-hosted, use the configured host (authHost remains undefined)
 
-    const body = await this.requestJSON("/auth/", undefined, {
+    const body = await this.requestJSON("/users/me/", undefined, {
       ...opts,
       host: authHost,
     });
@@ -1502,7 +1499,15 @@ export class SentryApiService {
       organizationSlug: string;
       projectSlug?: string;
       query?: string | null;
-      sortBy?: "user" | "freq" | "date" | "new";
+      sortBy?:
+        | "user"
+        | "freq"
+        | "date"
+        | "new"
+        | "last_seen"
+        | "first_seen"
+        | "count"
+        | "priority";
       limit?: number;
     },
     opts?: RequestOptions,
@@ -1546,286 +1551,34 @@ export class SentryApiService {
     return IssueSchema.parse(body);
   }
 
-  async getEventForIssue(
+  async getTrace(
     {
       organizationSlug,
-      issueId,
-      eventId,
+      traceId,
+      limit = 1000,
+      project = "-1",
+      statsPeriod = "14d",
     }: {
       organizationSlug: string;
-      issueId: string;
-      eventId: string;
-    },
-    opts?: RequestOptions,
-  ): Promise<Event> {
-    const body = await this.requestJSON(
-      `/organizations/${organizationSlug}/issues/${issueId}/events/${eventId}/`,
-      undefined,
-      opts,
-    );
-
-    // Try to parse with known event schemas first
-    const parseResult = EventSchema.safeParse(body);
-
-    if (parseResult.success) {
-      const rawEvent = parseResult.data;
-
-      // Return known event types with proper type discrimination
-      // "default" type represents error events without exception data
-      if (rawEvent.type === "error" || rawEvent.type === "default") {
-        return rawEvent;
-      }
-      if (rawEvent.type === "transaction") {
-        return rawEvent;
-      }
-      // "generic" type represents performance regression events and other metric-based issues
-      if (rawEvent.type === "generic") {
-        return rawEvent;
-      }
-      // "csp" type represents Content Security Policy violations
-      if (rawEvent.type === "csp") {
-        return rawEvent;
-      }
-
-      // Unknown event type that passed schema validation
-      // This means Sentry added a new event type we don't support yet
-      const eventType =
-        typeof rawEvent.type === "string"
-          ? rawEvent.type
-          : String(rawEvent.type);
-
-      // Log to Sentry so we can track new event types and add support
-      logIssue(`Unsupported event type: ${eventType}`, {
-        extra: {
-          eventType,
-          eventId: rawEvent.id,
-        },
-      });
-
-      return rawEvent; // Return as UnknownEvent
-    }
-
-    // Schema validation failed - this is a serious problem
-    // The API response doesn't match our expected structure at all
-    const bodyObj = body as Record<string, unknown>;
-    const eventType =
-      typeof bodyObj.type === "string" ? bodyObj.type : String(bodyObj.type);
-
-    logIssue(`Event failed schema validation: ${eventType}`, {
-      extra: {
-        eventType,
-        eventId: bodyObj.id,
-        validationError: parseResult.error.message,
-        validationIssues: parseResult.error.errors,
-      },
-    });
-
-    // Throw error - schema failures mean broken API contract
-    throw new ApiValidationError(
-      `Event failed schema validation: ${parseResult.error.message}`,
-      undefined,
-      undefined,
-      body,
-    );
-  }
-
-  async getLatestEventForIssue(
-    {
-      organizationSlug,
-      issueId,
-    }: {
-      organizationSlug: string;
-      issueId: string;
-    },
-    opts?: RequestOptions,
-  ): Promise<Event> {
-    return this.getEventForIssue(
-      {
-        organizationSlug,
-        issueId,
-        eventId: "latest",
-      },
-      opts,
-    );
-  }
-
-  /**
-   * Lists events for a specific issue.
-   * Uses the issue-specific endpoint which already filters by issue ID.
-   *
-   * @see https://docs.sentry.io/api/events/list-an-issues-events/
-   */
-  async listEventsForIssue(
-    {
-      organizationSlug,
-      issueId,
-      query,
-      limit = 50,
-      sort,
-      statsPeriod,
-      start,
-      end,
-      full = false,
-    }: {
-      organizationSlug: string;
-      issueId: string;
-      query?: string;
+      traceId: string;
       limit?: number;
-      sort?: string;
+      project?: string;
       statsPeriod?: string;
-      start?: string;
-      end?: string;
-      full?: boolean;
     },
     opts?: RequestOptions,
-  ) {
-    const params = new URLSearchParams();
+  ): Promise<Trace> {
+    const queryParams = new URLSearchParams();
+    queryParams.set("limit", String(limit));
+    queryParams.set("project", project);
+    queryParams.set("statsPeriod", statsPeriod);
 
-    if (query) {
-      params.append("query", query);
-    }
-
-    params.append("per_page", String(limit));
-
-    if (sort) {
-      params.append("sort", sort);
-    }
-
-    if (statsPeriod) {
-      params.append("statsPeriod", statsPeriod);
-    } else if (start && end) {
-      params.append("start", start);
-      params.append("end", end);
-    }
-
-    if (full) {
-      params.append("full", "true");
-    }
-
-    const apiUrl = `/organizations/${organizationSlug}/issues/${issueId}/events/?${params.toString()}`;
-    return await this.requestJSON(apiUrl, undefined, opts);
-  }
-
-  async listEventAttachments(
-    {
-      organizationSlug,
-      projectSlug,
-      eventId,
-    }: {
-      organizationSlug: string;
-      projectSlug: string;
-      eventId: string;
-    },
-    opts?: RequestOptions,
-  ): Promise<EventAttachmentList> {
     const body = await this.requestJSON(
-      `/projects/${organizationSlug}/${projectSlug}/events/${eventId}/attachments/`,
+      `/organizations/${organizationSlug}/trace/${traceId}/?${queryParams.toString()}`,
       undefined,
       opts,
     );
-    return EventAttachmentListSchema.parse(body);
+    return TraceSchema.parse(body);
   }
-
-  async getEventAttachment(
-    {
-      organizationSlug,
-      projectSlug,
-      eventId,
-      attachmentId,
-    }: {
-      organizationSlug: string;
-      projectSlug: string;
-      eventId: string;
-      attachmentId: string;
-    },
-    opts?: RequestOptions,
-  ): Promise<{
-    attachment: EventAttachment;
-    downloadUrl: string;
-    filename: string;
-    blob: Blob;
-  }> {
-    // Get the attachment metadata first
-    const attachmentsData = await this.requestJSON(
-      `/projects/${organizationSlug}/${projectSlug}/events/${eventId}/attachments/`,
-      undefined,
-      opts,
-    );
-
-    const attachments = EventAttachmentListSchema.parse(attachmentsData);
-    const attachment = attachments.find((att) => att.id === attachmentId);
-
-    if (!attachment) {
-      throw new ApiNotFoundError(
-        `Attachment with ID ${attachmentId} not found for event ${eventId}`,
-      );
-    }
-
-    // Download the actual file content
-    const downloadUrl = `/projects/${organizationSlug}/${projectSlug}/events/${eventId}/attachments/${attachmentId}/?download=1`;
-    const downloadResponse = await this.request(
-      downloadUrl,
-      {
-        method: "GET",
-        headers: {
-          Accept: "application/octet-stream",
-        },
-      },
-      opts,
-    );
-
-    return {
-      attachment,
-      downloadUrl: downloadResponse.url,
-      filename: attachment.name,
-      blob: await downloadResponse.blob(),
-    };
-  }
-
-  async updateIssue(
-    {
-      organizationSlug,
-      issueId,
-      status,
-      assignedTo,
-    }: {
-      organizationSlug: string;
-      issueId: string;
-      status?: string;
-      assignedTo?: string;
-    },
-    opts?: RequestOptions,
-  ): Promise<Issue> {
-    const updateData: Record<string, any> = {};
-    if (status !== undefined) updateData.status = status;
-    if (assignedTo !== undefined) updateData.assignedTo = assignedTo;
-
-    const body = await this.requestJSON(
-      `/organizations/${organizationSlug}/issues/${issueId}/`,
-      {
-        method: "PUT",
-        body: JSON.stringify(updateData),
-      },
-      opts,
-    );
-    return IssueSchema.parse(body);
-  }
-
-  // TODO: Sentry is not yet exposing a reasonable API to fetch trace data
-  // async getTrace({
-  //   organizationSlug,
-  //   traceId,
-  // }: {
-  //   organizationSlug: string;
-  //   traceId: string;
-  // }): Promise<z.infer<typeof SentryIssueSchema>> {
-  //   const response = await this.request(
-  //     `/organizations/${organizationSlug}/issues/${traceId}/`,
-  //   );
-
-  //   const body = await response.json();
-  //   return SentryIssueSchema.parse(body);
-  // }
 
   async searchErrors(
     {
@@ -1873,13 +1626,10 @@ export class SentryApiService {
     queryParams.append("field", "last_seen()");
     queryParams.append("field", "count()");
     queryParams.set("query", sentryQuery.join(" "));
-    // if (projectSlug) queryParams.set("project", projectSlug);
 
     const apiUrl = `/organizations/${organizationSlug}/events/?${queryParams.toString()}`;
 
     const body = await this.requestJSON(apiUrl, undefined, opts);
-    // TODO(dcramer): If you're using an older version of Sentry this API had a breaking change
-    // meaning this endpoint will error.
     return ErrorsSearchResponseSchema.parse(body).data;
   }
 
@@ -1928,7 +1678,6 @@ export class SentryApiService {
     queryParams.append("field", "project");
     queryParams.append("field", "timestamp");
     queryParams.set("query", sentryQuery.join(" "));
-    // if (projectSlug) queryParams.set("project", projectSlug);
 
     const apiUrl = `/organizations/${organizationSlug}/events/?${queryParams.toString()}`;
 
@@ -1936,374 +1685,137 @@ export class SentryApiService {
     return SpansSearchResponseSchema.parse(body).data;
   }
 
-  // ================================================================================
-  // API QUERY BUILDERS FOR DIFFERENT SENTRY APIS
-  // ================================================================================
+  /* -------------------------------------------------------------------------- */
+  /*                                 Monitors                                   */
+  /* -------------------------------------------------------------------------- */
 
-  /**
-   * Builds query parameters for the legacy Discover API (primarily used by errors dataset).
-   *
-   * Note: While the API endpoint is the same for all datasets, we maintain separate
-   * builders to make future divergence easier and to keep the code organized.
-   */
-  private buildDiscoverApiQuery(params: {
-    query: string;
-    fields: string[];
-    limit: number;
-    projectId?: string;
-    statsPeriod?: string;
-    start?: string;
-    end?: string;
-    sort: string;
-  }): URLSearchParams {
-    const queryParams = new URLSearchParams();
-
-    // Basic parameters
-    queryParams.set("per_page", params.limit.toString());
-    queryParams.set("query", params.query);
-    queryParams.set("dataset", "errors");
-
-    // Validate time parameters - can't use both relative and absolute
-    if (params.statsPeriod && (params.start || params.end)) {
-      throw new ApiValidationError(
-        "Cannot use both statsPeriod and start/end parameters. Use either statsPeriod for relative time or start/end for absolute time.",
-      );
-    }
-    if ((params.start && !params.end) || (!params.start && params.end)) {
-      throw new ApiValidationError(
-        "Both start and end parameters must be provided together for absolute time ranges.",
-      );
-    }
-    // Use either relative time (statsPeriod) or absolute time (start/end)
-    if (params.statsPeriod) {
-      queryParams.set("statsPeriod", params.statsPeriod);
-    } else if (params.start && params.end) {
-      queryParams.set("start", params.start);
-      queryParams.set("end", params.end);
-    }
-
-    if (params.projectId) {
-      queryParams.set("project", params.projectId);
-    }
-
-    // Sort parameter transformation for API compatibility
-    let apiSort = params.sort;
-    // Skip transformation for equation fields - they should be passed as-is
-    if (params.sort?.includes("(") && !params.sort?.includes("equation|")) {
-      // Transform: count(field) -> count_field, count() -> count
-      // Use safer string manipulation to avoid ReDoS
-      const parenStart = params.sort.indexOf("(");
-      const parenEnd = params.sort.indexOf(")", parenStart);
-      if (parenStart !== -1 && parenEnd !== -1) {
-        const beforeParen = params.sort.substring(0, parenStart);
-        const insideParen = params.sort.substring(parenStart + 1, parenEnd);
-        const afterParen = params.sort.substring(parenEnd + 1);
-        const transformedInside = insideParen
-          ? `_${insideParen.replace(/\./g, "_")}`
-          : "";
-        apiSort = beforeParen + transformedInside + afterParen;
-      }
-    }
-    queryParams.set("sort", apiSort);
-
-    // Add fields
-    for (const field of params.fields) {
-      queryParams.append("field", field);
-    }
-
-    return queryParams;
-  }
-
-  /**
-   * Builds query parameters for the modern EAP API (used by spans/logs datasets).
-   *
-   * Includes dataset-specific parameters like sampling for spans.
-   */
-  private buildEapApiQuery(params: {
-    query: string;
-    fields: string[];
-    limit: number;
-    projectId?: string;
-    dataset: "spans" | "logs";
-    statsPeriod?: string;
-    start?: string;
-    end?: string;
-    sort: string;
-  }): URLSearchParams {
-    const queryParams = new URLSearchParams();
-
-    // Basic parameters
-    queryParams.set("per_page", params.limit.toString());
-    queryParams.set("query", params.query);
-    queryParams.set("dataset", params.dataset);
-
-    // Validate time parameters - can't use both relative and absolute
-    if (params.statsPeriod && (params.start || params.end)) {
-      throw new ApiValidationError(
-        "Cannot use both statsPeriod and start/end parameters. Use either statsPeriod for relative time or start/end for absolute time.",
-      );
-    }
-    if ((params.start && !params.end) || (!params.start && params.end)) {
-      throw new ApiValidationError(
-        "Both start and end parameters must be provided together for absolute time ranges.",
-      );
-    }
-    // Use either relative time (statsPeriod) or absolute time (start/end)
-    if (params.statsPeriod) {
-      queryParams.set("statsPeriod", params.statsPeriod);
-    } else if (params.start && params.end) {
-      queryParams.set("start", params.start);
-      queryParams.set("end", params.end);
-    }
-
-    if (params.projectId) {
-      queryParams.set("project", params.projectId);
-    }
-
-    // Dataset-specific parameters
-    if (params.dataset === "spans") {
-      queryParams.set("sampling", "NORMAL");
-    }
-
-    // Sort parameter transformation for API compatibility
-    let apiSort = params.sort;
-    // Skip transformation for equation fields - they should be passed as-is
-    if (params.sort?.includes("(") && !params.sort?.includes("equation|")) {
-      // Transform: count(field) -> count_field, count() -> count
-      // Use safer string manipulation to avoid ReDoS
-      const parenStart = params.sort.indexOf("(");
-      const parenEnd = params.sort.indexOf(")", parenStart);
-      if (parenStart !== -1 && parenEnd !== -1) {
-        const beforeParen = params.sort.substring(0, parenStart);
-        const insideParen = params.sort.substring(parenStart + 1, parenEnd);
-        const afterParen = params.sort.substring(parenEnd + 1);
-        const transformedInside = insideParen
-          ? `_${insideParen.replace(/\./g, "_")}`
-          : "";
-        apiSort = beforeParen + transformedInside + afterParen;
-      }
-    }
-    queryParams.set("sort", apiSort);
-
-    // Add fields
-    for (const field of params.fields) {
-      queryParams.append("field", field);
-    }
-
-    return queryParams;
-  }
-
-  /**
-   * Searches for events in Sentry using the unified events API.
-   * This method is used by the search_events tool for semantic search.
-   *
-   * Routes to the appropriate query builder based on dataset, even though
-   * the underlying API endpoint is the same. This separation makes the code
-   * cleaner and allows for future API divergence.
-   */
-  async searchEvents(
-    {
-      organizationSlug,
-      query,
-      fields,
-      limit = 10,
-      projectId,
-      dataset = "spans",
-      statsPeriod,
-      start,
-      end,
-      sort = "-timestamp",
-    }: {
-      organizationSlug: string;
-      query: string;
-      fields: string[];
-      limit?: number;
-      projectId?: string;
-      dataset?: "spans" | "errors" | "logs";
-      statsPeriod?: string;
-      start?: string;
-      end?: string;
-      sort?: string;
-    },
+  async listMonitors(
+    organizationSlug: string,
     opts?: RequestOptions,
-  ) {
-    let queryParams: URLSearchParams;
-
-    if (dataset === "errors") {
-      // Use Discover API query builder
-      queryParams = this.buildDiscoverApiQuery({
-        query,
-        fields,
-        limit,
-        projectId,
-        statsPeriod,
-        start,
-        end,
-        sort,
-      });
-    } else {
-      // Use EAP API query builder for spans and logs
-      queryParams = this.buildEapApiQuery({
-        query,
-        fields,
-        limit,
-        projectId,
-        dataset,
-        statsPeriod,
-        start,
-        end,
-        sort,
-      });
-    }
-
-    const apiUrl = `/organizations/${organizationSlug}/events/?${queryParams.toString()}`;
-    return await this.requestJSON(apiUrl, undefined, opts);
-  }
-
-  // POST https://us.sentry.io/api/0/issues/5485083130/autofix/
-  async startAutofix(
-    {
-      organizationSlug,
-      issueId,
-      eventId,
-      instruction = "",
-    }: {
-      organizationSlug: string;
-      issueId: string;
-      eventId?: string;
-      instruction?: string;
-    },
-    opts?: RequestOptions,
-  ): Promise<AutofixRun> {
+  ): Promise<MonitorList> {
     const body = await this.requestJSON(
-      `/organizations/${organizationSlug}/issues/${issueId}/autofix/`,
+      `/organizations/${organizationSlug}/monitors/`,
+      undefined,
+      opts,
+    );
+    return MonitorListSchema.parse(body);
+  }
+
+  async createMonitor(
+    organizationSlug: string,
+    data: {
+      name: string;
+      url: string;
+      monitorType: string;
+      interval: string;
+      project?: string | number;
+    },
+    opts?: RequestOptions,
+  ): Promise<Monitor> {
+    const payload = {
+      name: data.name,
+      url: data.url,
+      monitor_type: data.monitorType,
+      interval: data.interval,
+      project: data.project,
+    };
+
+    const body = await this.requestJSON(
+      `/organizations/${organizationSlug}/monitors/`,
       {
         method: "POST",
-        body: JSON.stringify({
-          event_id: eventId,
-          instruction,
-        }),
+        body: JSON.stringify(payload),
       },
       opts,
     );
-    return AutofixRunSchema.parse(body);
+    return MonitorSchema.parse(body);
   }
 
-  // GET https://us.sentry.io/api/0/issues/5485083130/autofix/
-  async getAutofixState(
-    {
-      organizationSlug,
-      issueId,
-    }: {
-      organizationSlug: string;
-      issueId: string;
-    },
+  async listStatusPages(
+    organizationSlug: string,
     opts?: RequestOptions,
-  ): Promise<AutofixRunState> {
+  ): Promise<StatusPageList> {
     const body = await this.requestJSON(
-      `/organizations/${organizationSlug}/issues/${issueId}/autofix/`,
+      `/organizations/${organizationSlug}/status-pages/`,
       undefined,
       opts,
     );
-    return AutofixRunStateSchema.parse(body);
+    return StatusPageListSchema.parse(body);
   }
 
-  /**
-   * Retrieves high-level metadata about a trace.
-   *
-   * Returns statistics including span counts, error counts, transaction
-   * breakdown, and operation type distribution for the specified trace.
-   *
-   * @param params Query parameters
-   * @param params.organizationSlug Organization identifier
-   * @param params.traceId Trace identifier (32-character hex string)
-   * @param params.statsPeriod Optional stats period (e.g., "14d", "7d")
-   * @param opts Request options
-   * @returns Trace metadata with statistics
-   *
-   * @example
-   * ```typescript
-   * const traceMeta = await apiService.getTraceMeta({
-   *   organizationSlug: "my-org",
-   *   traceId: "a4d1aae7216b47ff8117cf4e09ce9d0a"
-   * });
-   * console.log(`Trace has ${traceMeta.span_count} spans`);
-   * ```
-   */
-  async getTraceMeta(
-    {
-      organizationSlug,
-      traceId,
-      statsPeriod = "14d",
-    }: {
-      organizationSlug: string;
-      traceId: string;
-      statsPeriod?: string;
+  async createStatusPage(
+    organizationSlug: string,
+    data: {
+      name: string;
+      slug: string;
+      is_public?: boolean;
+      domain?: string;
     },
     opts?: RequestOptions,
-  ): Promise<TraceMeta> {
-    const queryParams = new URLSearchParams();
-    queryParams.set("statsPeriod", statsPeriod);
+  ): Promise<StatusPage> {
+    const payload = {
+      name: data.name,
+      slug: data.slug,
+      is_public: data.is_public ?? true,
+      domain: data.domain,
+    };
 
     const body = await this.requestJSON(
-      `/organizations/${organizationSlug}/trace-meta/${traceId}/?${queryParams.toString()}`,
+      `/organizations/${organizationSlug}/status-pages/`,
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
+      opts,
+    );
+    return StatusPageSchema.parse(body);
+  }
+
+  /* -------------------------------------------------------------------------- */
+  /*                                 Alerts                                     */
+  /* -------------------------------------------------------------------------- */
+
+  async listAlerts(
+    organizationSlug: string,
+    projectSlug: string,
+    opts?: RequestOptions,
+  ): Promise<AlertRuleList> {
+    const body = await this.requestJSON(
+      `/projects/${organizationSlug}/${projectSlug}/alerts/`,
       undefined,
       opts,
     );
-    return TraceMetaSchema.parse(body);
+    return AlertRuleListSchema.parse(body);
   }
 
-  /**
-   * Retrieves the complete trace structure with all spans.
-   *
-   * Returns the hierarchical trace data including all spans, their timing
-   * information, operation details, and nested relationships.
-   *
-   * @param params Query parameters
-   * @param params.organizationSlug Organization identifier
-   * @param params.traceId Trace identifier (32-character hex string)
-   * @param params.limit Maximum number of spans to return (default: 1000)
-   * @param params.project Project filter (-1 for all projects)
-   * @param params.statsPeriod Optional stats period (e.g., "14d", "7d")
-   * @param opts Request options
-   * @returns Complete trace tree structure
-   *
-   * @example
-   * ```typescript
-   * const trace = await apiService.getTrace({
-   *   organizationSlug: "my-org",
-   *   traceId: "a4d1aae7216b47ff8117cf4e09ce9d0a",
-   *   limit: 1000
-   * });
-   * console.log(`Root spans: ${trace.length}`);
-   * ```
-   */
-  async getTrace(
-    {
-      organizationSlug,
-      traceId,
-      limit = 1000,
-      project = "-1",
-      statsPeriod = "14d",
-    }: {
-      organizationSlug: string;
-      traceId: string;
-      limit?: number;
-      project?: string;
-      statsPeriod?: string;
+  async createAlert(
+    organizationSlug: string,
+    projectSlug: string,
+    data: {
+      name: string;
+      actionMatch?: string; // "all", "any", "none"
+      frequency?: number;
+      actions?: Record<string, any>[];
+      conditions?: Record<string, any>[];
     },
     opts?: RequestOptions,
-  ): Promise<Trace> {
-    const queryParams = new URLSearchParams();
-    queryParams.set("limit", String(limit));
-    queryParams.set("project", project);
-    queryParams.set("statsPeriod", statsPeriod);
+  ): Promise<AlertRule> {
+    const payload = {
+      name: data.name,
+      action_match: data.actionMatch || "all",
+      frequency: data.frequency || 30,
+      actions: data.actions || [],
+      conditions: data.conditions || [],
+    };
 
     const body = await this.requestJSON(
-      `/organizations/${organizationSlug}/trace/${traceId}/?${queryParams.toString()}`,
-      undefined,
+      `/projects/${organizationSlug}/${projectSlug}/alerts/`,
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
       opts,
     );
-    return TraceSchema.parse(body);
+    return AlertRuleSchema.parse(body);
   }
 }

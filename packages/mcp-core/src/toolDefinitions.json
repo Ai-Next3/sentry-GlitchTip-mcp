@@ -42,6 +42,40 @@
     "requiredScopes": []
   },
   {
+    "name": "create_alert",
+    "description": "Create a new alert rule for a project in GlitchTip.\nBe careful to specify valid conditions and actions if providing them, otherwise defaults will be used.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationSlug": {
+          "type": "string",
+          "description": "The organization's slug. You can find a existing list of organizations you have access to using the `find_organizations()` tool."
+        },
+        "projectSlug": {
+          "type": "string",
+          "description": "The project's slug. You can find a list of existing projects in an organization using the `find_projects()` tool."
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the alert rule."
+        },
+        "actionMatch": {
+          "type": "string",
+          "enum": ["all", "any", "none"],
+          "description": "When to trigger actions based on conditions. Default: 'all'"
+        },
+        "frequency": {
+          "type": "number",
+          "description": "How often to check/alert in minutes. Default: 30"
+        }
+      },
+      "required": ["organizationSlug", "projectSlug", "name"],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "requiredScopes": ["project:write"]
+  },
+  {
     "name": "create_dsn",
     "description": "Create an additional DSN for an EXISTING project.\n\nUSE THIS TOOL WHEN:\n- Project already exists and needs additional DSN\n- 'Create another DSN for project X'\n- 'I need a production DSN for existing project'\n\nDO NOT USE for new projects (use create_project instead)\n\nBe careful when using this tool!\n\n<examples>\n### Create additional DSN for existing project\n```\ncreate_dsn(organizationSlug='my-organization', projectSlug='my-project', name='Production')\n```\n</examples>\n\n<hints>\n- If the user passes a parameter in the form of name/otherName, its likely in the format of <organizationSlug>/<projectSlug>.\n- If any parameter is ambiguous, you should clarify with the user what they meant.\n</hints>",
     "inputSchema": {
@@ -78,6 +112,47 @@
       "$schema": "http://json-schema.org/draft-07/schema#"
     },
     "requiredScopes": ["project:write"]
+  },
+  {
+    "name": "create_monitor",
+    "description": "Create a new uptime monitor in GlitchTip.\nUse this tool to start monitoring a website or API endpoint.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationSlug": {
+          "type": "string",
+          "description": "The organization's slug."
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the monitor (e.g., 'Homepage', 'API Health')."
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "The URL to monitor."
+        },
+        "monitorType": {
+          "type": "string",
+          "enum": ["http", "ping", "ssl"],
+          "default": "http",
+          "description": "The type of monitor (default: http)."
+        },
+        "interval": {
+          "type": "string",
+          "default": "60",
+          "description": "Check interval in minutes (or seconds format depending on API, usually '60S' or '1m'). Passing a string like '60' often works as seconds or minutes."
+        },
+        "project": {
+          "type": ["string", "number"],
+          "description": "Optional project ID or slug to associate with."
+        }
+      },
+      "required": ["organizationSlug", "name", "url"],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "requiredScopes": ["org:write"]
   },
   {
     "name": "create_project",
@@ -129,6 +204,40 @@
       "$schema": "http://json-schema.org/draft-07/schema#"
     },
     "requiredScopes": ["project:write", "team:read"]
+  },
+  {
+    "name": "create_status_page",
+    "description": "Create a new status page in GlitchTip.\nStatus pages allow you to publicly communicate operational status.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationSlug": {
+          "type": "string",
+          "description": "The organization's slug."
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the status page."
+        },
+        "slug": {
+          "type": "string",
+          "description": "The URL slug for the status page (must be unique)."
+        },
+        "is_public": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether the page is public (default: true)."
+        },
+        "domain": {
+          "type": "string",
+          "description": "Custom domain for the status page."
+        }
+      },
+      "required": ["organizationSlug", "name", "slug"],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "requiredScopes": ["org:write"]
   },
   {
     "name": "create_team",
@@ -509,6 +618,61 @@
       "$schema": "http://json-schema.org/draft-07/schema#"
     },
     "requiredScopes": ["event:read"]
+  },
+  {
+    "name": "list_alerts",
+    "description": "List all alert rules for a project in GlitchTip.\nUse this tool to see what conditions trigger notifications.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationSlug": {
+          "type": "string",
+          "description": "The organization's slug. You can find a existing list of organizations you have access to using the `find_organizations()` tool."
+        },
+        "projectSlug": {
+          "type": "string",
+          "description": "The project's slug. You can find a list of existing projects in an organization using the `find_projects()` tool."
+        }
+      },
+      "required": ["organizationSlug", "projectSlug"],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "requiredScopes": ["project:read"]
+  },
+  {
+    "name": "list_monitors",
+    "description": "List all uptime monitors for an organization in GlitchTip.\nUse this tool to see what websites or services are currently being monitored.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationSlug": {
+          "type": "string",
+          "description": "The organization's slug. You can find a existing list of organizations you have access to using the `find_organizations()` tool."
+        }
+      },
+      "required": ["organizationSlug"],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "requiredScopes": ["org:read"]
+  },
+  {
+    "name": "list_status_pages",
+    "description": "List all status pages for an organization in GlitchTip.\nUse this tool to see what public status pages are configured.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationSlug": {
+          "type": "string",
+          "description": "The organization's slug."
+        }
+      },
+      "required": ["organizationSlug"],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "requiredScopes": ["org:read"]
   },
   {
     "name": "search_docs",

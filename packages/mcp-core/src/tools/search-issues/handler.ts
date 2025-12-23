@@ -120,12 +120,32 @@ export default defineTool({
 
     const translatedQuery = agentResult.result;
 
+    // Map Sentry sort options to GlitchTip equivalents to ensure compatibility
+    // GlitchTip ONLY accepts: 'last_seen', 'first_seen', 'count', 'priority', etc.
+    const sortMapping: Record<
+      string,
+      "last_seen" | "count" | "first_seen" | "priority"
+    > = {
+      date: "last_seen",
+      freq: "count",
+      new: "first_seen",
+      user: "priority", // Best approximation or fallback
+      last_seen: "last_seen",
+      count: "count",
+      first_seen: "first_seen",
+      priority: "priority",
+    };
+
+    const requestedSort = translatedQuery.sort || "last_seen";
+    // @ts-ignore - The mapping handles the string keys safely
+    const finalSort = sortMapping[requestedSort] || "last_seen";
+
     // Execute the search - listIssues accepts projectSlug directly
     const issues = await apiService.listIssues({
       organizationSlug: params.organizationSlug,
       projectSlug: params.projectSlugOrId ?? undefined,
       query: translatedQuery.query ?? undefined,
-      sortBy: translatedQuery.sort || "date",
+      sortBy: finalSort,
       limit: params.limit,
     });
 

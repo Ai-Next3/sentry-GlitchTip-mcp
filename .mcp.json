@@ -1,5 +1,17 @@
 {
   "mcpServers": {
+    "glitchtip": {
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "/path/to/sentry-GlitchTip-mcp/packages/mcp-server/dist/index.js"
+      ],
+      "env": {
+        "SENTRY_ACCESS_TOKEN": "<YOUR_GLITCHTIP_AUTH_TOKEN>",
+        "SENTRY_HOST": "glitchtip.your-domain.com",
+        "OPENAI_API_KEY": "<YOUR_OPENAI_API_KEY>"
+      }
+    },
     "sentry": {
       "type": "http",
       "url": "https://mcp.sentry.dev/mcp/sentry/mcp-server?agent=1"

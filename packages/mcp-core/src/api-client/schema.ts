@@ -102,7 +102,7 @@ export const TeamSchema = z
   .object({
     id: z.union([z.string(), z.number()]),
     slug: z.string(),
-    name: z.string(),
+    name: z.string().optional().nullable(),
   })
   .passthrough();
 
@@ -110,9 +110,9 @@ export const TeamListSchema = z.array(TeamSchema);
 
 export const ProjectSchema = z
   .object({
-    id: z.union([z.string(), z.number()]),
-    slug: z.string(),
-    name: z.string(),
+    id: z.union([z.string(), z.number()]).optional(),
+    slug: z.string().optional(),
+    name: z.string().optional(),
     platform: z.string().nullable().optional(),
   })
   .passthrough();
@@ -133,36 +133,45 @@ export const ClientKeySchema = z
 
 export const ClientKeyListSchema = z.array(ClientKeySchema);
 
-export const ReleaseSchema = z.object({
-  id: z.union([z.string(), z.number()]),
-  version: z.string(),
-  shortVersion: z.string(),
-  dateCreated: z.string().datetime(),
-  dateReleased: z.string().datetime().nullable(),
-  firstEvent: z.string().datetime().nullable(),
-  lastEvent: z.string().datetime().nullable(),
-  newGroups: z.number(),
-  lastCommit: z
-    .object({
-      id: z.union([z.string(), z.number()]),
-      message: z.string(),
-      dateCreated: z.string().datetime(),
-      author: z.object({
-        name: z.string(),
-        email: z.string(),
-      }),
-    })
-    .nullable(),
-  lastDeploy: z
-    .object({
-      id: z.union([z.string(), z.number()]),
-      environment: z.string(),
-      dateStarted: z.string().datetime().nullable(),
-      dateFinished: z.string().datetime().nullable(),
-    })
-    .nullable(),
-  projects: z.array(ProjectSchema),
-});
+export const ReleaseSchema = z
+  .object({
+    id: z.union([z.string(), z.number()]).optional(),
+    version: z.string(),
+    shortVersion: z.string().optional(),
+    dateCreated: z.string().datetime().optional().nullable(),
+    date_created: z.string().datetime().optional().nullable(),
+    dateReleased: z.string().datetime().nullable().optional(),
+    date_released: z.string().datetime().nullable().optional(),
+    firstEvent: z.string().datetime().nullable().optional(),
+    first_event: z.string().datetime().nullable().optional(),
+    lastEvent: z.string().datetime().nullable().optional(),
+    last_event: z.string().datetime().nullable().optional(),
+    newGroups: z.number().optional(),
+    new_groups: z.number().optional(),
+    lastCommit: z
+      .object({
+        id: z.union([z.string(), z.number()]),
+        message: z.string(),
+        dateCreated: z.string().datetime(),
+        author: z.object({
+          name: z.string(),
+          email: z.string(),
+        }),
+      })
+      .nullable()
+      .optional(),
+    lastDeploy: z
+      .object({
+        id: z.union([z.string(), z.number()]),
+        environment: z.string(),
+        dateStarted: z.string().datetime().nullable(),
+        dateFinished: z.string().datetime().nullable(),
+      })
+      .nullable()
+      .optional(),
+    projects: z.array(ProjectSchema).optional(),
+  })
+  .passthrough();
 
 export const ReleaseListSchema = z.array(ReleaseSchema);
 
@@ -750,3 +759,45 @@ export const TraceIssueSchema = z
 export const TraceSchema = z.array(
   z.union([TraceSpanSchema, TraceIssueSchema]),
 );
+
+export const MonitorSchema = z
+  .object({
+    id: z.union([z.string(), z.number()]).optional(),
+    name: z.string().optional(),
+    url: z.string().optional(),
+    monitor_type: z.string().optional(),
+    interval: z.union([z.string(), z.number()]).optional(),
+    project: z.union([z.string(), z.number()]).nullable().optional(),
+    is_up: z.boolean().nullable().optional(),
+    last_check: z.string().nullable().optional(),
+  })
+  .passthrough();
+
+export const MonitorListSchema = z.array(MonitorSchema);
+
+export const StatusPageSchema = z
+  .object({
+    id: z.union([z.string(), z.number()]).optional(),
+    name: z.string().optional(),
+    slug: z.string().optional(),
+    is_public: z.boolean().default(true).optional(),
+    domain: z.string().nullable().optional(),
+  })
+  .passthrough();
+
+export const StatusPageListSchema = z.array(StatusPageSchema);
+
+export const AlertRuleSchema = z
+  .object({
+    id: z.union([z.string(), z.number()]),
+    name: z.string(),
+    action_match: z.string().optional(),
+    frequency: z.number().nullable().optional(),
+    conditions: z.array(z.record(z.any())).optional(),
+    actions: z.array(z.record(z.any())).optional(),
+    environment: z.string().nullable().optional(),
+    date_created: z.string().optional(),
+  })
+  .passthrough();
+
+export const AlertRuleListSchema = z.array(AlertRuleSchema);
